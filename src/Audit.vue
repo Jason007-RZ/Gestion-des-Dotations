@@ -45,17 +45,25 @@ const GROUPES = [
     '2fa_codes_regeneres': ['Codes de secours régénérés', AMBRE],
     code_secours_utilise: ['Code de secours utilisé', AMBRE]
   }],
-  ['Dotations', {
-    dotation_creee: ['Bon de dotation', BRAND],
-    incident_cree: ['Perte / détérioration (PV)', ROUGE],
-    remplacement: ['Bon de remplacement', AMBRE],
+  ['Mouvements', {
+    perception: ['Perception', BRAND],
+    paquetage: ['Paquetage', BRAND],
     reintegration: ['Réintégration', CIEL],
-    statut_militaire: ['Mutation / radiation', GRIS],
+    echange: ['Échange', AMBRE],
+    perte: ['Perte', ROUGE],
+    annulation: ['Annulation', GRIS],
     document: ['Document édité', ARDOISE]
   }],
+  ['Demandes (perte, dérogation)', {
+    demande_creee: ['Demande déposée', CIEL],
+    demande_validee: ['Demande validée', VERT],
+    demande_refusee: ['Demande refusée', ROUGE],
+    demande_annulee: ['Demande retirée', GRIS],
+    demande_executee: ['Demande enregistrée', BRAND]
+  }],
   ['Stock', {
-    entree_stock: ['Entrée en stock', ARDOISE],
-    reforme: ['Réforme', GRIS],
+    entree_stock: ['Entrée de stock', ARDOISE],
+    inventaire: ['Inventaire', VIOLET],
     seuil: ["Seuil d'alerte", VIOLET]
   }],
   ['Référentiels', {

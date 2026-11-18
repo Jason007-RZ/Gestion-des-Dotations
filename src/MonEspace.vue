@@ -1,75 +1,120 @@
 <script setup>
-// Espace du militaire (cahier des charges §4 : « consultation de son propre paquetage »).
 import { ref, computed, onMounted } from 'vue'
-import api, { messageErreur } from '@/services/api'
-import { STATUTS, dateCourte, anciennete } from './militaires/format'
-import { ECHEANCES } from './dotations/format'
+import api, { messageErreur, enListe } from '@/services/api'
+import { ouvrirPdf } from '@/services/pdf'
 
-defineProps({ user: { type: Object, default: null } })
-const emit = defineEmits(['aller'])
+// Espace du militaire : sa propre fiche, sa dotation selon son grade, son échéancier personnel.
+// Le backend limite déjà l'accès à sa propre fiche (militaire_id).
+const props = defineProps({ user: { type: Object, default: null } })
+const emit = defineEmits(['aller']) // 'demandes' : ouvre l'écran des demandes (signalement d'une perte)
 
-const donnees = ref(null)
-const erreur = ref('')
-onMounted(async () => {
+const fiche = ref(null)
+const ecarts = ref([])
+const mouvements = ref([])
+const loading = ref(true)
+const errorMessage = ref('')
+
+const charger = async () => {
+  loading.value = true
+  errorMessage.value = ''
   try {
-    donnees.value = (await api.get('/mon-espace')).data
-  } catch (e) {
-    erreur.value = e?.response?.status === 404 ? "Votre compte n'est relié à aucune fiche militaire. Contactez l'administrateur." : messageErreur(e, 'Impossible de charger votre espace.')
+    const liste = enListe((await api.get('/militaires')).data)
+    const ma = liste[0]
+    if (!ma) {
+      errorMessage.value = "Aucune fiche militaire n'est rattachée à ce compte. Contactez l'administrateur."
+      return
+    }
+    const [detail, ec, mv] = await Promise.all([
+      api.get(`/militaires/${ma.id}`),
+      api.get(`/militaires/${ma.id}/ecarts`),
+      api.get('/mouvements')
+    ])
+    fiche.value = detail.data
+    ecarts.value = ec.data.ecarts || []
+    mouvements.value = enListe(mv.data)
+  } catch (error) {
+    errorMessage.value = messageErreur(error, 'Impossible de charger votre fiche.')
+  } finally {
+    loading.value = false
   }
-})
-const m = computed(() => donnees.value?.militaire)
-const mesures = computed(() => m.value?.mensuration_actuelle)
+}
+
+const maFichePdf = () => fiche.value && ouvrirPdf(`/militaires/${fiche.value.id}/fiche-individuelle`, `fiche-${fiche.value.matricule}.pdf`)
+
+const aPercevoir = computed(() => ecarts.value.filter((e) => e.ecart > 0))
+const percus = computed(() => mouvements.value.filter((m) => m.type === 'perception'))
+
+onMounted(charger)
 </script>
 
 <template>
   <div>
-    <h1 class="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight mb-1">Mon paquetage</h1>
-    <p class="text-sm text-gray-500 mb-5">Les effets qui vous ont été remis et leurs dates de renouvellement.</p>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Mon espace</h1>
+        <p class="text-sm text-gray-500">Votre fiche, votre dotation et l'historique de vos perceptions.</p>
+      </div>
+      <div v-if="fiche" class="flex flex-wrap items-center gap-2">
+        <button type="button" @click="emit('aller', 'demandes')" class="text-sm font-semibold text-red-700 bg-red-50 border border-red-100 px-4 py-2.5 rounded-xl hover:bg-red-100 transition">Signaler une perte</button>
+        <button type="button" @click="maFichePdf" class="text-sm font-semibold text-brand-700 bg-brand-50 border border-brand-100 px-4 py-2.5 rounded-xl hover:bg-brand-100 transition">Ma fiche (PDF)</button>
+      </div>
+    </div>
 
-    <p v-if="erreur" class="p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm rounded-r-lg">{{ erreur }}</p>
-    <div v-else-if="!donnees" class="p-8 text-center text-sm text-gray-400">Chargement…</div>
+    <div v-if="loading" class="text-center text-gray-400 text-sm py-12 animate-pulse">Chargement de votre fiche...</div>
+    <div v-else-if="errorMessage" class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">{{ errorMessage }}</div>
 
-    <template v-else>
-      <section class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 mb-4">
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <p class="text-lg font-semibold text-gray-900">{{ m.grade?.libelle }} {{ m.nom }} {{ m.prenoms }}</p>
-            <p class="text-xs text-gray-500"><span class="font-mono">{{ m.matricule }}</span> · {{ m.unite?.code }} — {{ m.unite?.libelle }} · incorporé il y a {{ anciennete(m.date_incorporation) }}</p>
-          </div>
-          <span :class="STATUTS[m.statut]?.classe" class="text-xs px-2 py-0.5 rounded-full border">{{ STATUTS[m.statut]?.libelle }}</span>
+    <div v-else-if="fiche" class="space-y-6">
+      <!-- Identité -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div><p class="text-[10px] font-semibold text-gray-400">Nom</p><p class="font-bold text-gray-900">{{ fiche.grade }} {{ fiche.nom }} {{ fiche.prenom }}</p></div>
+        <div><p class="text-[10px] font-semibold text-gray-400">Matricule</p><p class="font-bold text-gray-900">{{ fiche.matricule }}</p></div>
+        <div><p class="text-[10px] font-semibold text-gray-400">Unité</p><p class="font-bold text-gray-900">{{ fiche.unite?.nom || '—' }}</p></div>
+        <div>
+          <p class="text-[10px] font-semibold text-gray-400">Mensurations</p>
+          <p v-if="fiche.mensuration" class="font-bold text-gray-900">T. {{ fiche.mensuration.taille_vetement }} · P. {{ fiche.mensuration.pointure }}</p>
+          <p v-else class="text-amber-600 text-sm font-medium">Non renseignées (voir le magasin)</p>
         </div>
-        <div class="grid grid-cols-3 gap-2 mt-4">
-          <div v-for="x in [{ l: 'Vêtement', v: mesures?.taille_vetement?.valeur }, { l: 'Pointure', v: mesures?.pointure?.valeur }, { l: 'Tour de tête', v: mesures?.tour_tete?.valeur }]" :key="x.l" class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2 text-center">
-            <p class="text-[11px] text-gray-500">{{ x.l }}</p>
-            <p class="text-lg font-semibold tabular-nums" :class="x.v ? 'text-gray-900' : 'text-gray-300'">{{ x.v ?? '—' }}</p>
-          </div>
-        </div>
-        <p class="text-[11px] text-gray-400 mt-2">{{ mesures ? 'Mesuré le ' + dateCourte(mesures.date_mesure) + '. Une taille a changé ? Signalez-le au magasin.' : 'Pas encore mesuré : présentez-vous au magasin.' }}</p>
-      </section>
-
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-3"><p class="text-xs text-gray-500">Articles en service</p><p class="text-xl font-semibold tabular-nums">{{ donnees.resume.articles }}</p></div>
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-3"><p class="text-xs text-gray-500">À renouveler</p><p class="text-xl font-semibold tabular-nums" :class="donnees.resume.echus ? 'text-red-700' : ''">{{ donnees.resume.echus }}</p></div>
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-3"><p class="text-xs text-gray-500">Sous 30 jours</p><p class="text-xl font-semibold tabular-nums" :class="donnees.resume.a_30_jours ? 'text-amber-700' : ''">{{ donnees.resume.a_30_jours }}</p></div>
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-3"><p class="text-xs text-gray-500">À rendre au départ</p><p class="text-xl font-semibold tabular-nums text-violet-700">{{ donnees.resume.a_reintegrer }}</p></div>
       </div>
 
-      <section class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-4">
-        <h2 class="px-4 sm:px-5 pt-4 pb-2 text-base font-semibold text-gray-900">Effets en service</h2>
-        <p v-if="!donnees.paquetage.length" class="px-5 pb-5 text-sm text-gray-400">Aucun effet en service pour le moment.</p>
-        <ul v-else class="divide-y divide-gray-100">
-          <li v-for="l in donnees.paquetage" :key="l.id" class="px-4 sm:px-5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="flex-1 min-w-[10rem] text-sm text-gray-900">{{ l.article?.designation }}<span v-if="l.taille" class="text-gray-500"> · {{ l.taille.valeur }}</span><span class="text-gray-500"> × {{ l.quantite }}</span></span>
-            <span :class="ECHEANCES[l.echeance]?.classe" class="text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap">{{ l.date_echeance ? (l.echeance === 'echue' ? 'À renouveler depuis le ' : 'Jusqu\'au ') + dateCourte(l.date_echeance) : 'À rendre au départ' }}</span>
-          </li>
-        </ul>
-      </section>
-
-      <div class="flex flex-wrap gap-2">
-        <button type="button" @click="emit('aller', 'mouvements')" class="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-medium hover:bg-gray-50">Mes bons de dotation</button>
-        <button type="button" @click="emit('aller', 'demandes')" class="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-medium hover:bg-gray-50">Mes incidents</button>
+      <!-- Dotation -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="p-4 pl-6 border-b border-gray-100 flex justify-between items-center">
+          <span class="font-semibold text-gray-800 text-sm">Ma dotation (barème du grade {{ fiche.grade }})</span>
+          <span v-if="aPercevoir.length" class="text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100 px-3 py-1 rounded-full">{{ aPercevoir.length }} article(s) à percevoir</span>
+        </div>
+        <div v-if="ecarts.length === 0" class="p-8 text-center text-gray-400 text-sm">Aucun barème défini pour votre grade.</div>
+        <table v-else class="w-full text-left text-sm">
+          <thead class="bg-gray-50/70 text-gray-400 text-xs">
+            <tr><th class="p-3 pl-6">Article</th><th class="p-3">Taille</th><th class="p-3">Dû</th><th class="p-3">Perçu</th><th class="p-3 pr-6">Situation</th></tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="e in ecarts" :key="e.declinaison_id">
+              <td class="p-3 pl-6 font-medium text-gray-900">{{ e.article }}</td>
+              <td class="p-3">{{ e.taille }}</td>
+              <td class="p-3">{{ e.quantite_due }}</td>
+              <td class="p-3">{{ e.quantite_percue }}</td>
+              <td class="p-3 pr-6 font-semibold" :class="e.ecart > 0 ? 'text-amber-600' : e.ecart < 0 ? 'text-red-600' : 'text-brand-600'">
+                {{ e.ecart > 0 ? e.ecart + ' à percevoir' : e.ecart < 0 ? 'Dépassement' : 'Complet' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <p class="text-xs text-gray-500 mt-3">Un effet perdu ou abîmé ? Présentez-vous au magasin : un procès-verbal sera établi.</p>
-    </template>
+
+      <!-- Perceptions -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="p-4 pl-6 border-b border-gray-100 font-semibold text-gray-800 text-sm">Mes perceptions</div>
+        <div v-if="percus.length === 0" class="p-8 text-center text-gray-400 text-sm">Aucune perception enregistrée.</div>
+        <table v-else class="w-full text-left text-sm">
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="m in percus" :key="m.id">
+              <td class="p-3 pl-6 text-xs text-gray-500">{{ new Date(m.date_mvt || m.created_at).toLocaleDateString('fr-FR') }}</td>
+              <td class="p-3 font-medium text-gray-900">{{ m.declinaison?.article?.designation }} <span class="ml-1 bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded-full">{{ m.declinaison?.taille }}</span></td>
+              <td class="p-3 pr-6 text-right font-semibold">× {{ m.quantite }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>

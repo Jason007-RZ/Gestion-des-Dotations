@@ -6,13 +6,13 @@ import Login from './Login.vue'
 import Enrolement from './Enrolement.vue'
 import MDP from './MDP.vue'
 import ReinitialiserMdp from './ReinitialiserMdp.vue'
-import Referentiels from './Referentiels.vue'
-import Dotations from './Dotations.vue'
-import Incidents from './Incidents.vue'
+import Catalogue from './Catalogue.vue'
+import Mouvements from './Mouvements.vue'
+import Demandes from './Demandes.vue'
 import Stocks from './Stocks.vue'
 import Audit from './Audit.vue'
 import Securite from './Securite.vue'
-import Militaires from './Militaires.vue'
+import Effectifs from './Effectifs.vue'
 import Previsions from './Previsions.vue'
 import Utilisateurs from './Utilisateurs.vue'
 import MonEspace from './MonEspace.vue'
@@ -66,12 +66,12 @@ const role = computed(() => currentUser.value?.role)
 // ----- Navigation filtrée par rôle (cahier des charges §4) -----
 const MENU = [
   { id: 'dashboard', section: 'Principal', label: 'Tableau de bord', court: 'Accueil', icone: 'accueil' },
-  { id: 'monespace', section: 'Principal', label: 'Mon paquetage', court: 'Paquetage', icone: 'moi' },
-  { id: 'mouvements', section: 'Principal', label: 'Bons de dotation', court: 'Dotations', icone: 'mouvements' },
-  { id: 'demandes', section: 'Principal', label: 'Incidents et retours', court: 'Incidents', icone: 'demandes' },
+  { id: 'monespace', section: 'Principal', label: 'Mon espace', court: 'Mon espace', icone: 'moi' },
+  { id: 'mouvements', section: 'Principal', label: 'Mouvements', court: 'Mouvements', icone: 'mouvements' },
+  { id: 'demandes', section: 'Principal', label: 'Demandes', court: 'Demandes', icone: 'demandes' },
   { id: 'stocks', section: 'Principal', label: 'Stock des magasins', court: 'Stock', icone: 'stocks' },
-  { id: 'catalogue', section: 'Principal', label: 'Catalogue et dotation', court: 'Catalogue', icone: 'catalogue' },
-  { id: 'effectifs', section: 'Personnel', label: 'Militaires et mensurations', court: 'Militaires', icone: 'effectifs' },
+  { id: 'catalogue', section: 'Principal', label: 'Catalogue et barèmes', court: 'Catalogue', icone: 'catalogue' },
+  { id: 'effectifs', section: 'Personnel', label: 'Effectifs et mensurations', court: 'Effectifs', icone: 'effectifs' },
   { id: 'previsions', section: 'Personnel', label: 'Prévisions des besoins', court: 'Prévisions', icone: 'previsions' },
   { id: 'utilisateurs', section: 'Administration', label: 'Gestion des comptes', court: 'Comptes', icone: 'comptes' },
   { id: 'audit', section: 'Administration', label: "Journal d'audit", court: 'Audit', icone: 'audit' }
@@ -95,15 +95,16 @@ const initiales = computed(() => (currentUser.value?.name || currentUser.value?.
 // ----- Tableau de bord : chargé par <Dashboard />, qui nous renvoie le nombre d'alertes de stock -----
 const nbAlertes = ref(0)
 
-// ----- Incidents à traiter (pastille du menu) : pertes et détériorations pas encore remplacées -----
+// ----- Demandes à traiter (pastille du menu) -----
+// Chef d'unité et administrateur : demandes à valider ; magasinier : demandes validées à enregistrer.
 // Pas de rafraîchissement automatique en arrière-plan : une requête périodique compterait comme de l'activité
 // côté serveur (délai d'inactivité du jeton). On recompte à la connexion, à chaque changement d'écran et après chaque action.
 const nbDemandes = ref(0)
 const chargerCompteurDemandes = async () => {
   if (!isAuthenticated.value || !peutVoir('demandes', role.value)) return
   try {
-    const { data } = await api.get('/incidents', { params: { a_remplacer: 1, par_page: 1 } })
-    nbDemandes.value = Number(data?.total) || 0
+    const { data } = await api.get('/demandes/compteurs')
+    nbDemandes.value = Number(data?.a_traiter) || 0
   } catch (e) {
     /* sans gravité : la pastille n'est qu'une aide */
   }
@@ -236,7 +237,7 @@ onBeforeUnmount(() => {
             <AppIcon :nom="m.icone" :taille="18" />
             <span class="flex-1 text-left">{{ m.label }}</span>
             <span v-if="m.id === 'dashboard' && nbAlertes > 0" class="bg-red-500 text-white text-[11px] font-semibold px-1.5 min-w-5 text-center rounded-full">{{ nbAlertes }}</span>
-            <span v-if="m.id === 'demandes' && nbDemandes > 0" class="bg-amber-500 text-white text-[11px] font-semibold px-1.5 min-w-5 text-center rounded-full" :title="nbDemandes + ' remplacement(s) à faire'">{{ nbDemandes }}</span>
+            <span v-if="m.id === 'demandes' && nbDemandes > 0" class="bg-amber-500 text-white text-[11px] font-semibold px-1.5 min-w-5 text-center rounded-full" :title="nbDemandes + ' demande(s) à traiter'">{{ nbDemandes }}</span>
           </button>
         </nav>
       </div>
@@ -253,7 +254,7 @@ onBeforeUnmount(() => {
           <span class="h-9 w-9 rounded-full bg-brand-600 text-white text-xs font-semibold flex items-center justify-center shrink-0">{{ initiales }}</span>
           <span class="min-w-0 flex-1 leading-tight">
             <span class="block text-sm font-medium text-white truncate">{{ currentUser?.name || currentUser?.email }}</span>
-            <span class="block text-xs text-stone-400 truncate">{{ LIBELLES_ROLES[role] || role }}<span v-if="currentUser?.unite"> · {{ currentUser.unite.libelle || currentUser.unite.nom }}</span></span>
+            <span class="block text-xs text-stone-400 truncate">{{ LIBELLES_ROLES[role] || role }}<span v-if="currentUser?.unite"> · {{ currentUser.unite.nom }}</span></span>
           </span>
         </button>
         <button @click="logout" title="Se déconnecter" aria-label="Se déconnecter" class="p-2 rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition-colors">
@@ -288,11 +289,11 @@ onBeforeUnmount(() => {
           <Dashboard v-if="currentTab === 'dashboard' && peutVoir('dashboard', role)" :user="currentUser" @alertes="nbAlertes = $event" @aller="currentTab = $event" />
           <MonEspace v-else-if="currentTab === 'monespace' && peutVoir('monespace', role)" :user="currentUser" @aller="currentTab = $event" />
           <Stocks v-else-if="currentTab === 'stocks' && peutVoir('stocks', role)" :user="currentUser" />
-          <Referentiels v-else-if="currentTab === 'catalogue'" :user="currentUser" />
-          <Dotations v-else-if="currentTab === 'mouvements'" :user="currentUser" />
-          <Incidents v-else-if="currentTab === 'demandes' && peutVoir('demandes', role)" :user="currentUser" @maj="chargerCompteurDemandes" />
-          <Militaires v-else-if="currentTab === 'effectifs' && peutVoir('effectifs', role)" :user="currentUser" />
-          <Previsions v-else-if="currentTab === 'previsions' && peutVoir('previsions', role)" :user="currentUser" />
+          <Catalogue v-else-if="currentTab === 'catalogue'" :user="currentUser" />
+          <Mouvements v-else-if="currentTab === 'mouvements'" :user="currentUser" @aller="currentTab = $event" @demandes-maj="chargerCompteurDemandes" />
+          <Demandes v-else-if="currentTab === 'demandes' && peutVoir('demandes', role)" :user="currentUser" @maj="chargerCompteurDemandes" />
+          <Effectifs v-else-if="currentTab === 'effectifs' && peutVoir('effectifs', role)" :user="currentUser" />
+          <Previsions v-else-if="currentTab === 'previsions' && peutVoir('previsions', role)" />
           <Utilisateurs v-else-if="currentTab === 'utilisateurs' && peutVoir('utilisateurs', role)" :user="currentUser" />
           <Audit v-else-if="currentTab === 'audit' && peutVoir('audit', role)" />
           <Securite v-else-if="currentTab === 'securite'" :user="currentUser" />
