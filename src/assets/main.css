@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Identité : vert kaki (couleur d'action unique) sur fond neutre.
+   Les données gardent le bleu des graphiques ; le rouge est réservé aux alertes.
+   --------------------------------------------------------------- */
+@theme {
+  --color-brand-50: #f0f5f0;
+  --color-brand-100: #dde9de;
+  --color-brand-200: #bbd3be;
+  --color-brand-300: #8fb495;
+  --color-brand-400: #5e9068;
+  --color-brand-500: #3f7449;
+  --color-brand-600: #2f5d3a;
+  --color-brand-700: #264c2f;
+  --color-brand-800: #1f3d27;
+  --color-brand-900: #172e1d;
+  --color-side: #151d17;
+  --color-page: #f4f5f2;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background-color: var(--color-page);
+    color: #1d241e;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  button:not(:disabled),
+  [role="button"],
+  select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* Focus clavier toujours visible */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* Barre de défilement discrète (zones scrollables) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c9cec8 transparent;
+}
+
+/* Téléphone : cibles tactiles de 44 px et champs en 16 px (évite le zoom automatique d'iOS) */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  li button,
+  td button {
+    min-height: 40px;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Impression d'un document (bon de dotation, procès-verbal) : classe posée sur <body> le temps de l'impression. */
+@media print {
+  body.impression-bon * {
+    visibility: hidden !important;
+  }
+  body.impression-bon .zone-impression,
+  body.impression-bon .zone-impression * {
+    visibility: visible !important;
+  }
+  body.impression-bon .zone-impression {
+    position: fixed;
+    inset: 0;
+    padding: 12mm;
+    background: white;
+  }
+  body.impression-bon .imprime-cellule {
+    display: table-cell !important;
+  }
+}
